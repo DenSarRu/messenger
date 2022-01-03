@@ -7,10 +7,35 @@
         ○ -p <port> — TCP-порт для работы (по умолчанию использует 7777);
         ○ -a <addr> — IP-адрес для прослушивания (по умолчанию слушает все доступные адреса).
 """
-import socket
 import json
-import time
-from utils import parse
+import logging
+import socket
+from log import server_log_config
+
+from utils import parse, get_message, send_message, load_configs
+
+server_logger = logging.getLogger('server_log')
+CONFIGS = dict()
+
+
+def handle_message(message) -> dict:
+    """
+    Функция для анализа сообщения, поступившего от клиента
+    :param message: JSON object
+    :return:
+    """
+    if CONFIGS.get('ACTION') in message \
+            and message[CONFIGS.get('ACTION')] == CONFIGS.get('PRESENCE') \
+            and CONFIGS.get('TIME') in message \
+            and CONFIGS.get('USER') in message \
+            and message[CONFIGS.get('USER')][CONFIGS.get('ACCOUNT_NAME')] == 'Guest':
+        server_logger.info('correct request')
+        return {CONFIGS.get('RESPONSE'): 200}
+    server_logger.warning('Incorrect request')
+    return {
+        CONFIGS.get('RESPONSE'): 400,
+        CONFIGS.get('ERROR'): 'Bad Request'
+    }
 
 
 def create_server_socket(address='', port=7777):
@@ -23,51 +48,32 @@ def create_server_socket(address='', port=7777):
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind((address, port))
-    sock.listen(5)
+    sock.listen(CONFIGS.get('MAX_CONNECTIONS'))
+    server_logger.debug('Socket created')
 
     while True:
-        client, addr = sock.accept()
-        print(f'accept request from client {addr}')
+        client, client_address = sock.accept()
+        server_logger.info(f'accept request from client address: {client_address[0]} | port: {client_address[1]}')
 
-        data = client.recv(640)
-        if not data:
-            print(f"we don't received any data from {addr}")
+        try:
+            message_from_client = get_message(client, CONFIGS)
+            server_logger.debug(f'message: {str(message_from_client)}')
+            response = handle_message(message_from_client)
 
-        message_from_client = check_client_message(data, addr)
-        # print(message_from_client)
-        message_to_client = forming_response_to_client(message_from_client)
-
-        client.send(bytes(message_to_client, encoding='utf-8'))
-        client.close()
-
-
-def check_client_message(message: json, address: str) -> tuple:
-    """
-    Функция для анализа сообщения, поступившего от клиента
-    :param message: JSON object
-    :param address: адрес клиента
-    :return:
-    """
-    client_message = json.loads(message)
-
-    print(f'"action" message from client {address}: {client_message["action"]}')
-    return client_message['action'], client_message['user']
+            send_message(client, response, CONFIGS)
+            client.close()
+        except(ValueError, json.JSONDecodeError) as e:
+            server_logger.warning(f'Принято некорректное сообщение от клиента: {client_address}! {e}')
+            client.close()
 
 
-def forming_response_to_client(message_from_client):
-    response = ''
-
-    if message_from_client[0] == 'presence':
-        response = '100'
-
-    message = {
-        "response": response,
-        "time": time.time(),
-    }
-    return json.dumps(message)
+def server_main():
+    server_logger.info('Запуск сервера!')
+    global CONFIGS
+    CONFIGS = load_configs()
+    args = parse()
+    create_server_socket(args.address, args.port)
 
 
 if __name__ == "__main__":
-
-    args = parse()
-    create_server_socket(args.address, args.port)
+    server_main()
