@@ -13,14 +13,15 @@ import logging
 import socket
 import time
 from log import client_log_config
-
+from decorators import log
 from utils import parse, load_configs, send_message, get_message
 
 client_logger = logging.getLogger('client_log')
 CONFIGS = dict()
 
 
-def create_presence_message(account_name):
+@log
+def create_presence_message(account_name, CONFIGS):
     message = {
         CONFIGS.get('ACTION'): CONFIGS.get('PRESENCE'),
         CONFIGS.get('TIME'): time.time(),
@@ -31,7 +32,21 @@ def create_presence_message(account_name):
     return message
 
 
-def handle_response(message):
+@log
+def create_authenticate_message(account_name: str, account_password: str) -> dict:
+    message = {
+        CONFIGS.get('ACTION'): CONFIGS.get('AUTHENTICATE'),
+        CONFIGS.get('TIME'): time.time(),
+        CONFIGS.get('USER'): {
+            CONFIGS.get('ACCOUNT_NAME'): account_name,
+            CONFIGS.get('PASSWORD'): account_password
+        }
+    }
+    return message
+
+
+@log
+def handle_response(message, CONFIGS):
     if CONFIGS.get('RESPONSE') in message:
         if message[CONFIGS.get('RESPONSE')] == 200:
             return '200 : OK'
@@ -39,6 +54,7 @@ def handle_response(message):
     raise ValueError
 
 
+@log
 def create_client_socket(address, port=7777):
     """
     создание соединения с сервером
@@ -49,11 +65,11 @@ def create_client_socket(address, port=7777):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((address, port))
     client_logger.debug('Установлено соединение с сервером')
-    presence_message = create_presence_message('Guest')
+    presence_message = create_presence_message('Guest', CONFIGS)
     send_message(sock, presence_message, CONFIGS)
     try:
         response = get_message(sock, CONFIGS)
-        hanlded_response = handle_response(response)
+        hanlded_response = handle_response(response, CONFIGS)
         client_logger.info(f'Ответ от сервера: {response}')
         print(hanlded_response)
     except (ValueError, json.JSONDecodeError):
@@ -61,11 +77,11 @@ def create_client_socket(address, port=7777):
 
     sock.close()
 
-
+@log
 def client_main():
     client_logger.info('Клиент запущен!!')
     global CONFIGS
-    CONFIGS = load_configs()
+    CONFIGS = load_configs(is_server=False)
     args = parse(is_server=False)
     create_client_socket(args.address, args.port)
 

@@ -21,6 +21,7 @@ datefmt = '%Y-%m-%d %H:%M:%S'
 client_file_handler = logging.FileHandler('log/client.log')
 # создаем форматтер
 file_format = logging.Formatter(fmt=string_format, datefmt=datefmt)
+client_file_handler.setFormatter(file_format)
 client_file_handler.setLevel(logging.WARNING)
 
 client_stream_handler = logging.StreamHandler(sys.stderr)

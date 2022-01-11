@@ -1,4 +1,5 @@
-test.py
+some_test_script.py
 *.log
 /log/*.log
 /log/server.log.2022-01-03_17-19
+/log/server.log.2022-01-05

@@ -89,5 +89,7 @@ def get_message(opened_socket, CONFIGS):
         raise ValueError("incorrect data type received")  # логирование (warning)
 
 
+# import test
+
 if __name__ == '__main__':
     parse()

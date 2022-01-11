@@ -11,6 +11,7 @@ import json
 import logging
 import socket
 from log import server_log_config
+from decorators import log
 
 from utils import parse, get_message, send_message, load_configs
 
@@ -18,10 +19,11 @@ server_logger = logging.getLogger('server_log')
 CONFIGS = dict()
 
 
-def handle_message(message) -> dict:
+@log
+def handle_message(message, CONFIGS) -> dict:
     """
     Функция для анализа сообщения, поступившего от клиента
-    :param message: JSON object
+    :param message: dict
     :return:
     """
     if CONFIGS.get('ACTION') in message \
@@ -29,7 +31,7 @@ def handle_message(message) -> dict:
             and CONFIGS.get('TIME') in message \
             and CONFIGS.get('USER') in message \
             and message[CONFIGS.get('USER')][CONFIGS.get('ACCOUNT_NAME')] == 'Guest':
-        server_logger.info('correct request')
+        server_logger.info('Correct request')
         return {CONFIGS.get('RESPONSE'): 200}
     server_logger.warning('Incorrect request')
     return {
@@ -38,6 +40,7 @@ def handle_message(message) -> dict:
     }
 
 
+@log
 def create_server_socket(address='', port=7777):
     """
     Функция создает сокет и принимает сообщение клиента.
@@ -58,7 +61,7 @@ def create_server_socket(address='', port=7777):
         try:
             message_from_client = get_message(client, CONFIGS)
             server_logger.debug(f'message: {str(message_from_client)}')
-            response = handle_message(message_from_client)
+            response = handle_message(message_from_client, CONFIGS)
 
             send_message(client, response, CONFIGS)
             client.close()
@@ -67,6 +70,7 @@ def create_server_socket(address='', port=7777):
             client.close()
 
 
+@log
 def server_main():
     server_logger.info('Запуск сервера!')
     global CONFIGS
