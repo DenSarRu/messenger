@@ -29,7 +29,10 @@ def load_configs(is_server=True) -> dict:
         'PRESENCE',
         'RESPONSE',
         'ERROR',
-        'MESSAGE'
+        'MESSAGE',
+        'EXIT',
+        'SENDER',
+        'DESTINATION'
     ]
     if not is_server:
         config_keys.append('DEFAULT_IP_ADDRESS')
