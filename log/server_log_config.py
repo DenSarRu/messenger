@@ -7,6 +7,7 @@
  - настройка ежедневной ротации лог-файлов.
 """
 import logging
+import os
 import sys
 from logging.handlers import TimedRotatingFileHandler
 
@@ -19,7 +20,17 @@ string_format = '[%(asctime)s] [%(levelname)-10s] [%(module)-8s] [%(funcName)-30
 # строка формата времени
 datefmt = '%Y-%m-%d %H:%M:%S'
 
-server_file_handler = TimedRotatingFileHandler('log/server.log', when="midnight", backupCount=7, encoding='utf-8')
+try:
+    os.mkdir('log')
+except FileExistsError:
+    pass
+finally:
+    server_file_handler = TimedRotatingFileHandler('log/messenger_server.log',
+                                                   when="midnight",
+                                                   backupCount=7,
+                                                   encoding='utf-8'
+                                                   )
+
 # создаем форматтер
 file_format = logging.Formatter(fmt=string_format, datefmt=datefmt)
 server_file_handler.setFormatter(file_format)
@@ -35,6 +46,6 @@ server_loger.addHandler(server_stream_handler)
 server_loger.addHandler(server_file_handler)
 
 if __name__ == '__main__':
-    server_loger.critical('some server critical unresolved error!')
+    server_loger.critical('some messenger_server critical unresolved error!')
     server_loger.info('tell someone this info')
-    server_loger.warning('another error with server')
+    server_loger.warning('another error with messenger_server')

@@ -1,10 +1,6 @@
-import json
-import os.path
-import sys
 import unittest
-import time
-from client import create_presence_message, handle_response
-from utils import load_configs
+from messenger_client.client_old import create_presence_message, handle_response
+from messenger_server.utils import load_configs
 
 
 class ClientTestCase(unittest.TestCase):

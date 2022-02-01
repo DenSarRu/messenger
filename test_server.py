@@ -1,11 +1,8 @@
-import json
-import os
-import sys
 import unittest
 import time
 
-from server import handle_message
-from utils import load_configs
+from messenger_server.server_old import handle_message
+from messenger_server.utils import load_configs
 
 
 class ClientTestCase(unittest.TestCase):
