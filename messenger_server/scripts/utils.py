@@ -9,6 +9,8 @@ import os
 import sys
 import yaml
 
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 
 def load_configs(is_server=True) -> dict:
     """
@@ -36,10 +38,10 @@ def load_configs(is_server=True) -> dict:
     ]
     if not is_server:
         config_keys.append('DEFAULT_IP_ADDRESS')
-    if not os.path.exists('config.yaml'):
+    if not os.path.exists('../../config.yaml'):
         print('Файл конфигурации не найден')  # logging
         sys.exit(1)
-    with open('config.yaml', encoding='utf-8') as config_file:
+    with open('../../config.yaml', encoding='utf-8') as config_file:
         CONFIGS = yaml.load(config_file, Loader=yaml.Loader)
     loaded_configs_keys = list(CONFIGS.keys())
     for key in config_keys:

@@ -1,0 +1,2 @@
+[2022-01-29 15:35:23] [ERROR     ] [server  ] [create_server_socket          ] > Клиент отключился от сервера. Тип исключения: ValueError, аргументы: ("we don't received any data",)
+[2022-01-29 15:35:27] [ERROR     ] [server  ] [create_server_socket          ] > Клиент отключился от сервера. Тип исключения: ValueError, аргументы: ("we don't received any data",)
