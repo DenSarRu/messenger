@@ -1,7 +1,7 @@
 """
  Файл сервисных функций проекта:
- utils.load_configs - загружает настройки проекта из файла
- utils.parse - обработка параметров командной строки
+ scripts.load_configs - загружает настройки проекта из файла
+ scripts.parse - обработка параметров командной строки
 """
 import argparse
 import json
@@ -53,22 +53,22 @@ def parse(is_server=True):
     """
     Обработка параметров командной строки.
     для клиента:
-        client.py 'address' ['port']:
+        messenger_client.py 'address' ['port']:
                 ○ addr — ip-адрес сервера, обязательный аргумент;
                 ○ port — tcp-порт на сервере, по умолчанию 7777.
     для сервера:
-        server.py [<addr>] [<port>]:
+        messenger_server.py [<addr>] [<port>]:
                 ○ addr — IP-адрес для прослушивания (по умолчанию слушает все доступные адреса);
                 ○ port — TCP-порт для работы (по умолчанию использует 7777).
     :return: an object with two attributes: address, port
     """
-    parser = argparse.ArgumentParser(description='Create socket and work with server')
+    parser = argparse.ArgumentParser(description='Create socket and work with messenger_server')
     if is_server:
         parser.add_argument("-a", "--address", default='',
-                            help="choose address for server (default ' ')")
+                            help="choose address for messenger_server (default ' ')")
     else:
         parser.add_argument("address",
-                            help="server address for creating connection")
+                            help="messenger_server address for creating connection")
     parser.add_argument("-p", "--port", default=7777, type=int,
                         help="port for creating connection (default 7777)")
 
@@ -76,12 +76,23 @@ def parse(is_server=True):
 
 
 def send_message(opened_socket, message, CONFIGS):
+    """
+    :param opened_socket:
+    :param message:
+    :param CONFIGS:
+    :return:
+    """
     json_message = json.dumps(message)
     response = json_message.encode(CONFIGS.get('ENCODING'))
     opened_socket.send(response)
 
 
 def get_message(opened_socket, CONFIGS):
+    """
+    :param opened_socket:
+    :param CONFIGS:
+    :return:
+    """
     response = opened_socket.recv(CONFIGS.get('MAX_PACKAGE_LENGTH'))
     if not response:
         raise ValueError("we don't received any data")  # логирование (warning)

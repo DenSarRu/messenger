@@ -1,5 +1,5 @@
 """"
-Функции сервера:
+Класс сервера:
     ● принимает сообщение клиента;
     ● формирует ответ клиенту;
     ● отправляет ответ клиенту;
@@ -7,194 +7,208 @@
         ○ -p <port> — TCP-порт для работы (по умолчанию использует 7777);
         ○ -a <addr> — IP-адрес для прослушивания (по умолчанию слушает все доступные адреса).
 """
-import json
 import logging
 import select
-from socket import socket, AF_INET, SOCK_STREAM
+import socket
+import threading
 
 from log import server_log_config
 from decorators import log
+from descriptors import Port
+from metaclasses import ServerVerifier
+from scripts.utils import parse, get_message, send_message, load_configs
 
-from utils import parse, get_message, send_message, load_configs
-
+# инициализация серверного логера
 server_logger = logging.getLogger('server_log')
-CONFIGS = dict()
+CONFIGS = {}
 
 
-@log
-def parse_client_msg(message, messages_list, sock, clients_list, names):
-    """
-        Обработчик сообщений клиентов
-        :param message: словарь сообщения
-        :param messages_list: список сообщений
-        :param sock: клиентский сокет
-        :param clients_list: список клиентских сокетов
-        :param names: список зарегистрированных клиентов
-        :return: словарь ответа
+class Server(threading.Thread, metaclass=ServerVerifier):
+    port = Port()
+
+    def __init__(self, address, port):
+        self.__CONFIGS = load_configs()
+        self.__logger = server_logger
+
+        self.__logger.debug('Запуск сервера!')
+        self.__address = address
+        self.__port = port
+        # self.__sock = None
+        self.listen_sockets = None
+        # Список клиентов и очередь сообщений
+        self.all_clients = []
+        self.all_messages = []
+        # Словарь зарегистрированных клиентов: ключ - имя пользователя, значение - сокет
+        self.all_names = {}
+        # Создает TCP-сокет сервера
+        self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Связывает сокет с ip-адресом и портом сервера
+        self.__sock.bind((self.__address, self.__port))
+        # Запускает режим прослушивания
+        self.__sock.listen(self.__CONFIGS.get('MAX_CONNECTIONS'))
+        self.__sock.settimeout(0.5)  # Таймаут для операций с сокетом
+        self.__logger.debug('Server socket created')
+        super().__init__()
+
+    # @log
+    # def init_socket(self):
+
+    # # Создает TCP-сокет сервера
+    # self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # # Связывает сокет с ip-адресом и портом сервера
+    # self.__sock.bind((self.__address, self.__port))
+    # # Запускает режим прослушивания
+    # self.__sock.listen(self.__CONFIGS.get('MAX_CONNECTIONS'))
+    # self.__sock.settimeout(0.5)  # Таймаут для операций с сокетом
+    # self.__logger.debug('Server socket created')
+
+    @log
+    def parse_client_msg(self, message, sock):
         """
-    server_logger.debug(f'Разбор сообщения от клиента: {message}')
+            Обработчик сообщений клиентов
+            :param message: словарь сообщения
+            :param messages_list: список сообщений
+            :param sock: клиентский сокет
+            :param clients_list: список клиентских сокетов
+            :param names: список зарегистрированных клиентов
+            :return: словарь ответа
+            """
+        self.__logger.debug(f'Разбор сообщения от клиента: {message}')
 
-    # возвращает сообщение о присутствии
-    if CONFIGS.get('ACTION') in message \
-            and message[CONFIGS.get('ACTION')] == CONFIGS.get('PRESENCE') \
-            and CONFIGS.get('TIME') in message:
+        # возвращает сообщение о присутствии
+        if self.__CONFIGS.get('ACTION') in message \
+                and message[self.__CONFIGS.get('ACTION')] == self.__CONFIGS.get('PRESENCE') \
+                and self.__CONFIGS.get('TIME') in message:
 
-        # авторизация
-        if message[CONFIGS.get('USER')][CONFIGS.get('ACCOUNT_NAME')] not in names.keys():
-            names[message[CONFIGS.get('USER')][CONFIGS.get('ACCOUNT_NAME')]] = sock
-            send_message(sock, {CONFIGS.get('RESPONSE'): 200}, CONFIGS)
-            server_logger.info(f'Авторизован клиент: {message[CONFIGS.get("USER")][CONFIGS.get("ACCOUNT_NAME")]}')
+            # авторизация
+            if message[self.__CONFIGS.get('USER')][self.__CONFIGS.get('ACCOUNT_NAME')] not in self.all_names.keys():
+                self.all_names[message[self.__CONFIGS.get('USER')][self.__CONFIGS.get('ACCOUNT_NAME')]] = sock
+                send_message(sock, {self.__CONFIGS.get('RESPONSE'): 200}, self.__CONFIGS)
+                self.__logger.info(
+                    f'Авторизован клиент: {message[self.__CONFIGS.get("USER")][self.__CONFIGS.get("ACCOUNT_NAME")]}')
+            else:
+                response = {
+                    self.__CONFIGS.get('RESPONSE'): 400,
+                    self.__CONFIGS.get('ERROR'): 'Имя пользователя уже занято.'
+                }
+                self.__logger.warning(
+                    f'Повторная попытка авторизации клиента: {message[self.__CONFIGS.get("USER")][self.__CONFIGS.get("ACCOUNT_NAME")]}!'
+                    f'Отказ. Имя пользователя уже занято.')
+                send_message(sock, response, self.__CONFIGS)
+                self.all_clients.remove(sock)
+                sock.close()
+            return
+
+        # формирует очередь сообщений
+        elif self.__CONFIGS.get('ACTION') in message and message[self.__CONFIGS.get('ACTION')] == 'msg' and \
+                self.__CONFIGS.get('SENDER') in message and self.__CONFIGS.get('DESTINATION') in message and \
+                self.__CONFIGS.get('MESSAGE') in message and self.__CONFIGS.get('TIME') in message:
+            self.__logger.debug('формирует очередь сообщений')
+            self.all_messages.append(message)
+            return
+
+        # выход клиента
+        elif self.__CONFIGS.get('ACTION') in message and message[self.__CONFIGS.get('ACTION')] == 'exit' and \
+                self.__CONFIGS.get('ACCOUNT_NAME') in message[self.__CONFIGS.get('USER')]:
+            self.__logger.debug(
+                f'выход клиента {message[self.__CONFIGS.get("USER")][self.__CONFIGS.get("ACCOUNT_NAME")]}')
+            response = {
+                "action": "quit"
+            }
+            send_message(sock, response, self.__CONFIGS)
+
+            self.all_clients.remove(
+                self.all_names[message[self.__CONFIGS.get('USER')][self.__CONFIGS.get('ACCOUNT_NAME')]])
+            self.all_names[message[self.__CONFIGS.get('USER')][self.__CONFIGS.get('ACCOUNT_NAME')]].close()
+            del self.all_names[message[self.__CONFIGS.get('USER')][self.__CONFIGS.get('ACCOUNT_NAME')]]
+            return
+
+        # возвращает сообщение об ошибке
         else:
             response = {
-                CONFIGS.get('RESPONSE'): 400,
-                CONFIGS.get('ERROR'): 'Имя пользователя уже занято.'
+                self.__CONFIGS.get('RESPONSE'): 400,
+                self.__CONFIGS.get('ERROR'): 'Bad Request',
             }
-            server_logger.warning(
-                f'Повторная попытка авторизации клиента: {message[CONFIGS.get("USER")][CONFIGS.get("ACCOUNT_NAME")]}!'
-                f'Отказ. Имя пользователя уже занято.')
-            send_message(sock, response, CONFIGS)
-            clients_list.remove(sock)
-            sock.close()
-        return
+            send_message(sock, response, self.__CONFIGS)
+            return
 
-    # формирует очередь сообщений
-    elif CONFIGS.get('ACTION') in message and message[CONFIGS.get('ACTION')] == 'msg' and \
-            CONFIGS.get('SENDER') in message and CONFIGS.get('DESTINATION') in message and \
-            CONFIGS.get('MESSAGE') in message and CONFIGS.get('TIME') in message:
-        server_logger.debug(f'формирует очередь сообщений')
-        messages_list.append(message)
-        return
-
-    # выход клиента
-    elif CONFIGS.get('ACTION') in message and message[CONFIGS.get('ACTION')] == 'exit' and \
-            CONFIGS.get('ACCOUNT_NAME') in message[CONFIGS.get('USER')]:
-        server_logger.debug(f'выход клиента {message[CONFIGS.get("USER")][CONFIGS.get("ACCOUNT_NAME")]}')
-        response = {
-            "action": "quit"
-        }
-        send_message(sock, response, CONFIGS)
-
-        clients_list.remove(names[message[CONFIGS.get('USER')][CONFIGS.get('ACCOUNT_NAME')]])
-        names[message[CONFIGS.get('USER')][CONFIGS.get('ACCOUNT_NAME')]].close()
-        del names[message[CONFIGS.get('USER')][CONFIGS.get('ACCOUNT_NAME')]]
-        return
-
-    # возвращает сообщение об ошибке
-    else:
-        response = {
-            CONFIGS.get('RESPONSE'): 400,
-            CONFIGS.get('ERROR'): 'Bad Request',
-        }
-        send_message(sock, response, CONFIGS)
-        return
-
-
-@log
-def route_client_msg(message, names, clients):
-    """
-    Адресная отправка сообщений.
-    :param message: словарь сообщения
-    :param names: список зарегистрированных клиентов
-    :param clients: список слушающих клиентских сокетов
-    :return:
-    """
-    if message[CONFIGS.get('DESTINATION')] in names and names[message[CONFIGS.get('DESTINATION')]] in clients:
-        send_message(names[message[CONFIGS.get('DESTINATION')]], message, CONFIGS)
-        server_logger.info(f'Отправлено сообщение пользователю {message[CONFIGS.get("DESTINATION")]} '
-                           f'от пользователя {message[CONFIGS.get("SENDER")]}.')
-    elif message[CONFIGS.get('DESTINATION')] in names and names[message[CONFIGS.get('DESTINATION')]] not in clients:
-        raise ConnectionError
-    else:
-        server_logger.error(
-            f'Пользователь {message[CONFIGS.get("DESTINATION")]} не зарегистрирован на сервере, '
-            f'отправка сообщения невозможна.')
-
-
-@log
-def create_server_socket(address='', port=7777):
-    """
-    Функция создает сокет и принимает сообщение клиента.
-    :param address: IP-адрес для прослушивания (по умолчанию слушает все доступные адреса);
-    :param port: TCP-порт для работы (по умолчанию используется 7777);
-    :return:
-    """
-    # Создает TCP-сокет сервера
-    server_tcp = socket(AF_INET, SOCK_STREAM)
-
-    # Связывает сокет с ip-адресом и портом сервера
-    server_tcp.bind((address, port))
-
-    # Таймаут для операций с сокетом
-    server_tcp.settimeout(0.5)
-
-    # Запускает режим прослушивания
-    server_tcp.listen(CONFIGS.get('MAX_CONNECTIONS'))
-
-    server_tcp.settimeout(0.2)  # Таймаут для операций с сокетом
-    server_logger.debug('Socket created')
-
-    # Список клиентов и очередь сообщений
-    all_clients = []
-    all_messages = []
-
-    # Словарь зарегистрированных клиентов: ключ - имя пользователя, значение - сокет
-    all_names = dict()
-
-    while True:
-        # Принимает запрос на соединение
-        # Возвращает кортеж (новый TCP-сокет клиента, адрес клиента)
-        try:
-            client_tcp, client_address = server_tcp.accept()
-        except OSError:
-            pass
+    @log
+    def route_client_msg(self, message):
+        """
+        Адресная отправка сообщений.
+        :param message: словарь сообщения
+        :param names: список зарегистрированных клиентов
+        :param clients: список слушающих клиентских сокетов
+        :return:
+        """
+        if message[self.__CONFIGS.get('DESTINATION')] in self.all_names and self.all_names[
+            message[self.__CONFIGS.get('DESTINATION')]] in self.listen_sockets:
+            send_message(self.all_names[message[self.__CONFIGS.get('DESTINATION')]], message, self.__CONFIGS)
+            self.__logger.info(f'Отправлено сообщение пользователю {message[self.__CONFIGS.get("DESTINATION")]} '
+                               f'от пользователя {message[self.__CONFIGS.get("SENDER")]}.')
+        elif message[self.__CONFIGS.get('DESTINATION')] in self.all_names and self.all_names[
+            message[self.__CONFIGS.get('DESTINATION')]] not in self.listen_sockets:
+            raise ConnectionError
         else:
-            server_logger.info(f'Установлено соедение с клиентом {client_address}')
-            all_clients.append(client_tcp)
+            self.__logger.error(
+                f'Пользователь {message[self.__CONFIGS.get("DESTINATION")]} не зарегистрирован на сервере, '
+                f'отправка сообщения невозможна.')
 
-        r_clients = []
-        w_clients = []
-        errs = []
+    @log
+    def run(self):
+        # self.init_socket()
 
-        # Запрашивает информацию о готовности к вводу, выводу и о наличии исключений для группы дескрипторов сокетов
-        try:
-            if all_clients:
-                r_clients, w_clients, errs = select.select(all_clients, all_clients, [], 0)
-        except OSError:
-            pass
-
-        # Чтение запросов из списка клиентов
-        if r_clients:
-            for r_sock in r_clients:
-                try:
-                    parse_client_msg(get_message(r_sock, CONFIGS), all_messages, r_sock, all_clients, all_names)
-                except Exception as ex:
-                    server_logger.error(f'Клиент отключился от сервера. '
-                                        f'Тип исключения: {type(ex).__name__}, аргументы: {ex.args}')
-                    all_clients.remove(r_sock)
-
-        # Роутинг сообщений адресатам
-        for msg in all_messages:
+        while True:
+            # Принимает запрос на соединение
+            # Возвращает кортеж (новый TCP-сокет клиента, адрес клиента)
             try:
-                route_client_msg(msg, all_names, w_clients)
-            except Exception:
-                server_logger.info(f'Связь с клиентом {msg[CONFIGS.get("DESTINATION")]} была потеряна')
-                all_clients.remove(all_names[msg[CONFIGS.get("DESTINATION")]])
-                del all_names[msg[CONFIGS.get("DESTINATION")]]
-        all_messages.clear()
+                client_tcp, client_address = self.__sock.accept()
+            except OSError:
+                pass
+            else:
+                self.__logger.info(f'Установлено соедение с клиентом {client_address}')
+                client_tcp.settimeout(0)
+                self.all_clients.append(client_tcp)
 
+            r_clients = []
+            w_clients = []
+            errs = []
 
-@log
-def server_main():
-    server_logger.info('Запуск сервера!')
-    global CONFIGS
-    CONFIGS = load_configs()
-    args = parse()
-    create_server_socket(args.address, args.port)
+            # Запрашивает информацию о готовности к вводу, выводу и о наличии исключений для
+            # группы дескрипторов сокетов
+            try:
+                if self.all_clients:
+                    r_clients, self.listen_sockets, errs = select.select(self.all_clients,
+                                                                         self.all_clients, [], 0)
+            except OSError:
+                pass
+
+            # Чтение запросов из списка клиентов
+            if r_clients:
+                for r_sock in r_clients:
+                    try:
+                        self.parse_client_msg(get_message(r_sock, self.__CONFIGS), r_sock)
+                    except Exception as ex:
+                        self.__logger.error(f'Клиент отключился от сервера. '
+                                            f'Тип исключения: {type(ex).__name__}, аргументы: {ex.args}')
+                        self.all_clients.remove(r_sock)
+
+            # Роутинг сообщений адресатам
+            for msg in self.all_messages:
+                try:
+                    self.route_client_msg(msg)
+                except Exception:
+                    self.__logger.info(f'Связь с клиентом {msg[self.__CONFIGS.get("DESTINATION")]} была потеряна')
+                    self.all_clients.remove(self.all_names[msg[self.__CONFIGS.get("DESTINATION")]])
+                    del self.all_names[msg[self.__CONFIGS.get("DESTINATION")]]
+            self.all_messages.clear()
 
 
 if __name__ == "__main__":
+    args = parse()
+    server = Server(args.address, args.port)
     try:
-        server_main()
+        server.run()
     except Exception as e:
         server_logger.error('Exception: {}'.format(str(e)))
     server_logger.info("Server stopped")

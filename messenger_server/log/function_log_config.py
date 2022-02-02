@@ -15,6 +15,7 @@ except FileExistsError:
     pass
 finally:
     function_file_handler = logging.FileHandler('log/function.log')
+
 # создаем форматтер
 file_format = logging.Formatter(fmt=string_format, datefmt=datefmt)
 function_file_handler.setFormatter(file_format)

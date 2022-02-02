@@ -7,6 +7,7 @@
 """
 
 import logging
+import os
 import sys
 
 
@@ -18,7 +19,12 @@ string_format = '[%(asctime)s] [%(levelname)-10s] [%(module)-8s] [%(funcName)-30
 # строка формата времени
 datefmt = '%Y-%m-%d %H:%M:%S'
 
-client_file_handler = logging.FileHandler('log/client.log')
+try:
+    os.mkdir('log')
+except FileExistsError:
+    pass
+finally:
+    client_file_handler = logging.FileHandler('log/messenger_client.log')
 # создаем форматтер
 file_format = logging.Formatter(fmt=string_format, datefmt=datefmt)
 client_file_handler.setFormatter(file_format)
