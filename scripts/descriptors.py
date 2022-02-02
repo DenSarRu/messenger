@@ -1,6 +1,6 @@
 import logging
 
-client_logger = logging.getLogger('client_log')
+server_logger = logging.getLogger('server_log')
 
 
 class Port:
@@ -14,7 +14,7 @@ class Port:
         if not 1024 <= value <= 65535:
             text = f'Попытка запуска с некорректным номером ' \
                    f'порта {value}. Допустимы адреса с 1024 до 65535.'
-            client_logger.critical(text)
+            server_logger.critical(text)
             raise TypeError('Некорректный номер порта')
         instance.__dict__[self.name] = value
 

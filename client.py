@@ -18,7 +18,7 @@ import time
 from decorators import log
 from descriptors import Port
 from metaclasses import ClientVerifier
-from utils import parse, get_message, send_message, load_configs
+from scripts.utils import parse, get_message, send_message, load_configs
 from log import client_log_config
 
 # Инициализация клиентского логера

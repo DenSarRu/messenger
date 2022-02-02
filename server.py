@@ -15,8 +15,8 @@ import threading
 from log import server_log_config
 from decorators import log
 from descriptors import Port
-from utils import parse, get_message, send_message, load_configs
 from metaclasses import ServerVerifier
+from scripts.utils import parse, get_message, send_message, load_configs
 
 # инициализация серверного логера
 server_logger = logging.getLogger('server_log')
