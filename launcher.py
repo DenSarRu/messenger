@@ -8,7 +8,7 @@ import time
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 processes = []
-server_args = ['python3', 'server']
+server_args = ['python3', 'server/server.py']
 client_args = ['python3', 'client', '127.0.0.1']
 
 while True:

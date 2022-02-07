@@ -34,12 +34,13 @@ def load_configs(is_server=True) -> dict:
         'SENDER',
         'DESTINATION'
     ]
+
     if not is_server:
         config_keys.append('DEFAULT_IP_ADDRESS')
-    if not os.path.exists('config.yaml'):
+    if not os.path.exists('server_config.yaml'):
         print('Файл конфигурации не найден')  # logging
         sys.exit(1)
-    with open('config.yaml', encoding='utf-8') as config_file:
+    with open('server_config.yaml', encoding='utf-8') as config_file:
         CONFIGS = yaml.load(config_file, Loader=yaml.Loader)
     loaded_configs_keys = list(CONFIGS.keys())
     for key in config_keys:
@@ -55,7 +56,6 @@ def parse(is_server=True):
     для клиента:
         messenger_client.py 'address' ['port']:
                 ○ addr — ip-адрес сервера, обязательный аргумент;
-                ○ name — имя клиента, обязательный аргумент;
                 ○ port — tcp-порт на сервере, по умолчанию 7777.
     для сервера:
         messenger_server.py [<addr>] [<port>]:
@@ -67,17 +67,9 @@ def parse(is_server=True):
     if is_server:
         parser.add_argument("-a", "--address", default='',
                             help="choose address for messenger_server (default ' ')")
-        parser.add_argument('-m',
-                            default='console',
-                            type=str.lower,
-                            nargs='?',
-                            choices=['gui', 'console'],
-                            help='Mode: GUI, Console (default console)')
     else:
         parser.add_argument("address",
                             help="messenger_server address for creating connection")
-        # parser.add_argument("-n", "--name")
-
     parser.add_argument("-p", "--port", default=7777, type=int,
                         help="port for creating connection (default 7777)")
 
